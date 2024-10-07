@@ -20,7 +20,7 @@
 
 Welcome to the **Control Panel**, an intuitive and powerful interface designed to manage and monitor an AI-powered voice assistant. Developed by **Leon**, a dedicated student at **UCSKM**, specifically for the **2024 Annual Function**, this Control Panel integrates real-time system monitoring, seamless text-based interactions, and customizable settings to enhance user experience.
 
-![Control Panel Interface](/images/Screenshot%20(1546).png)
+![Control Panel Interface](/images/Screenshot%20(1551).png)
 
 ## Features
 
