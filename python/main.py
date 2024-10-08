@@ -217,7 +217,7 @@ def listen_loop():
                     current_speech = f"You said: {text}"
                     threading.Thread(target=process_ai_response, args=(text,)).start()
 
-                if assistant_active and (time.time() - last_activation_time) > 30:
+                if assistant_active and (time.time() - last_activation_time) > 120:
                     assistant_active = False
                     print("Assistant deactivated due to timeout.")
 
