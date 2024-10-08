@@ -17,6 +17,7 @@
 - [Contact](#contact)
 
 ## Overview
+> Requires python 3.8+
 
 Welcome to the **Control Panel**, an intuitive and powerful interface designed to manage and monitor an AI-powered voice assistant. Developed by **Leon**, a dedicated student at **UCSKM**, specifically for the **2024 Annual Function**, this Control Panel integrates real-time system monitoring, seamless text-based interactions, and customizable settings to enhance user experience.
 
