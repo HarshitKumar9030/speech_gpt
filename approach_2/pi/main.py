@@ -13,7 +13,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 # Main server configuration
-MAIN_SERVER_URL = 'hhttp://192.168.81.193:5000/api/pi_data'  # Replace <MAIN_SERVER_IP> with your laptop's IP address
+MAIN_SERVER_URL = 'http://192.168.81.193:5000/api/pi_data'  # Replace <MAIN_SERVER_IP> with your laptop's IP address
 
 # Serial port configuration for Arduino
 SERIAL_PORT = '/dev/ttyACM0'  # Replace with your serial port (e.g., 'COM3' on Windows or '/dev/ttyACM0' on Linux)
