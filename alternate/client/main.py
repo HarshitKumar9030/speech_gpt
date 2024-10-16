@@ -20,7 +20,7 @@ current_speech = ""
 tts_lock = threading.Lock()
 
 # Replace this with the IP address and port of your laptop running the AI server
-AI_SERVER_URL = 'http://<YOUR_LAPTOP_IP>:8000/process_ai'
+AI_SERVER_URL = 'http://192.168.81.193:8000//process_ai'
 
 def init_db():
     conn = sqlite3.connect('assistant.db')
