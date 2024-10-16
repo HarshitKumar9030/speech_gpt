@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Assistant Control Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+
+        /* Custom switch styles */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 56px;
+            height: 28px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #d1d5db; /* bg-gray-300 */
+            transition: background-color 0.3s, transform 0.3s;
+            border-radius: 9999px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: transform 0.3s;
+            border-radius: 9999px;
+        }
+        input:checked + .slider {
+            background-color: #3b82f6; /* bg-blue-500 */
+        }
+        input:checked + .slider:before {
+            transform: translateX(28px);
+        }
+
+        /* About sheet styles */
+        .about-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: white;
+            padding: 1.5rem;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+            transform: translateY(100%);
+            opacity: 0;
+            z-index: 50;
+        }
+        .dark .about-sheet {
+            background-color: #1f2937; /* bg-gray-800 */
+            color: #f3f4f6; /* text-gray-100 */
+        }
+        .about-sheet.active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Smooth slide-in for main content */
+        .container {
+            transition: transform 0.5s ease-in-out;
+        }
+        .about-sheet.active ~ .container {
+            transform: translateY(-300px);
+        }
+
+        /* Button animations */
+        .btn-animate {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-animate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-animate:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Enhanced focus states for accessibility */
+        .focus-outline:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* focus:ring-blue-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+    <div class="container mx-auto p-4 max-w-7xl">
+        <header class="flex flex-col md:flex-row items-center justify-between mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 dark:text-gray-100">Audio Assistant Control Panel</h1>
+            <div class="flex items-center space-x-4 mt-4 md:mt-0">
+                <button id="aboutBtn" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 btn-animate">
+                    About
+                </button>
+                <button id="themeToggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 btn-animate" aria-label="Toggle dark mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" id="themeIcon" class="h-6 w-6 text-gray-800 dark:text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path id="sunIcon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        <path id="moonIcon" style="display: none;" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3h0a7 7 0 1010.59 9.79z" />
+                    </svg>
+                </button>
+                <button id="killBtn" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 btn-animate">
+                    Kill Switch
+                </button>
+            </div>
+        </header>
+
+        <main class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-8 transition-colors duration-300">
+            <!-- System Status Section -->
+            <section class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="bg-blue-100 dark:bg-gray-700 p-4 rounded-xl">
+                    <h3 class="text-lg font-semibold text-blue-800 dark:text-gray-100 mb-2">Assistant Status</h3>
+                    <span id="assistantStatus" class="text-2xl font-bold text-blue-600 dark:text-blue-400">Inactive</span>
+                </div>
+                <div class="bg-green-100 dark:bg-gray-700 p-4 rounded-xl">
+                    <h3 class="text-lg font-semibold text-green-800 dark:text-gray-100 mb-2">CPU Temperature</h3>
+                    <span id="cpuTemp" class="text-2xl font-bold text-green-600 dark:text-green-400">0°C</span>
+                </div>
+                <div class="bg-yellow-100 dark:bg-gray-700 p-4 rounded-xl">
+                    <h3 class="text-lg font-semibold text-yellow-800 dark:text-gray-100 mb-2">CPU Usage</h3>
+                    <span id="cpuUsage" class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">0%</span>
+                </div>
+                <div class="bg-purple-100 dark:bg-gray-700 p-4 rounded-xl">
+                    <h3 class="text-lg font-semibold text-purple-800 dark:text-gray-100 mb-2">Memory Usage</h3>
+                    <span id="memoryUsage" class="text-2xl font-bold text-purple-600 dark:text-purple-400">0%</span>
+                </div>
+                <!-- Sensor Distance -->
+                <div class="bg-indigo-100 dark:bg-gray-700 p-4 rounded-xl">
+                    <h3 class="text-lg font-semibold text-indigo-800 dark:text-gray-100 mb-2">Sensor Distance</h3>
+                    <span id="sensorDistance" class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">N/A</span>
+                </div>
+            </section>
+
+            <!-- Current Speech Section -->
+            <section>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Current Speech</h2>
+                <div id="currentSpeech" class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg text-lg min-h-[100px]">
+                    Waiting for activation...
+                </div>
+            </section>
+
+            <!-- Text Input Section -->
+            <section>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Text Input</h2>
+                <div class="flex">
+                    <input id="textInput" type="text" class="flex-grow p-2 rounded-l-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your message here...">
+                    <button id="submitBtn" class="bg-blue-500 text-white px-6 py-2 rounded-r-lg hover:bg-blue-600 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 btn-animate">
+                        Send
+                    </button>
+                </div>
+            </section>
+
+            <!-- Chat History Section -->
+            <section>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Chat History</h2>
+                <div id="chatHistory" class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg h-64 overflow-y-auto space-y-4">
+                </div>
+            </section>
+
+            <!-- Requests Log Section -->
+            <section>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Requests Log</h2>
+                <div id="requestsLog" class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg h-64 overflow-y-auto space-y-4">
+                    <!-- Requests will be populated here -->
+                </div>
+            </section>
+
+            <!-- Pi Data Section -->
+            <section>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Raspberry Pi Data</h2>
+                <div id="piData" class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg space-y-4">
+                    <div class="flex justify-between">
+                        <span class="font-semibold text-gray-800 dark:text-gray-100">CPU Usage:</span>
+                        <span id="piCpuUsage" class="text-gray-800 dark:text-gray-100">0%</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-semibold text-gray-800 dark:text-gray-100">Memory Usage:</span>
+                        <span id="piMemoryUsage" class="text-gray-800 dark:text-gray-100">0%</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-semibold text-gray-800 dark:text-gray-100">CPU Temperature:</span>
+                        <span id="piCpuTemp" class="text-gray-800 dark:text-gray-100">N/A</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-semibold text-gray-800 dark:text-gray-100">Sensor Distance:</span>
+                        <span id="piSensorDistance" class="text-gray-800 dark:text-gray-100">N/A</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Settings</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                        <label for="wakeWordInput" class="font-semibold block mb-2 text-gray-800 dark:text-gray-100">Wake Word:</label>
+                        <input id="wakeWordInput" type="text" class="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" value="hello">
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                        <label class="font-semibold block mb-2 text-gray-800 dark:text-gray-100">Voice Response:</label>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-800 dark:text-gray-100">Off</span>
+                            <label class="switch">
+                                <input id="voiceToggle" type="checkbox" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span class="text-gray-800 dark:text-gray-100">On</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                        <label for="personalitySelect" class="font-semibold block mb-2 text-gray-800 dark:text-gray-100">Assistant Personality:</label>
+                        <select id="personalitySelect" class="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="Default">Default</option>
+                            <option value="Friendly">Friendly</option>
+                            <option value="Professional">Professional</option>
+                        </select>
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                        <label class="font-semibold block mb-2 text-gray-800 dark:text-gray-100">Sensor Enabled:</label>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-800 dark:text-gray-100">Off</span>
+                            <label class="switch">
+                                <input id="sensorToggle" type="checkbox" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span class="text-gray-800 dark:text-gray-100">On</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="saveSettingsBtn" class="mt-6 bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 btn-animate">
+                    Save Settings
+                </button>
+            </section>
+        </main>
+
+        <footer class="mt-8 text-center text-gray-600 dark:text-gray-400">
+            <p class="mt-2">Created by <a class="text-blue-500 dark:text-blue-400" href="https://leoncyriac.me" target="_blank" rel="noopener noreferrer">Leon</a> 💖</p>
+        </footer>
+    </div>
+
+    <!-- About Sheet -->
+    <div id="aboutSheet" class="about-sheet dark:bg-gray-800 dark:text-gray-100 p-6">
+        <h2 class="text-2xl font-bold mb-4">About This Control Panel</h2>
+        <p class="mb-4">This Control Panel was developed by <strong>Leon</strong>, a dedicated student at UCSKM, for the <strong>2024 Annual Function</strong>. It is designed to manage and monitor an AI-powered voice assistant, providing real-time status updates, facilitating text-based interactions, and offering customizable settings to tailor the assistant's behavior to your needs.</p>
+        
+        <h3 class="text-xl font-semibold mb-2">Key Features:</h3>
+        <ul class="list-disc list-inside mb-4">
+            <li>📊 Real-time system status monitoring</li>
+            <li>💬 Text-based interaction with the AI assistant</li>
+            <li>🔊 Customizable wake word and voice response settings</li>
+            <li>🌙 Dark mode for comfortable viewing in low-light environments</li>
+            <li>🗄️ Chat history for reviewing past interactions</li>
+            <li>🔍 Requests log for monitoring user interactions</li>
+            <li>⚙️ Easy-to-use settings interface</li>
+            <li>🔒 Secure access with kill switch functionality</li>
+            <li>🎨 Smooth animations for an enhanced user experience</li>
+            <li>📏 Sensor integration for automatic greetings</li>
+            <li>⏰ Time-aware responses</li>
+            <li>🌐 Real-time information fetching via Bing Search API</li>
+        </ul>
+
+        <h3 class="text-xl font-semibold mb-2">About UCSKM</h3>
+        <p class="mb-4">UCSKM School is committed to fostering innovation and excellence in education. Our annual functions showcase the talents and achievements of our students and staff, integrating cutting-edge technology to enhance the experience.</p>
+        <p class="mb-4">For more information about UCSKM School, visit our website: <a href="https://ucskmschool.com" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">ucskmschool.com</a>.</p>
+
+        <h3 class="text-xl font-semibold mb-2">Developer</h3>
+        <p class="mb-4">This Control Panel was developed by <a href="https://leoncyriac.me" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">Leon</a>, a passionate student at UCSKM, who is dedicated to integrating technology and education to create innovative solutions.</p>
+
+        <button id="closeAboutBtn" class="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 btn-animate">
+            Close
+        </button>
+    </div>
+
+    <script>
+        let isDarkMode = false;
+
+        // Initialize settings by fetching from the server
+        function initializeSettings() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const settings = data.settings;
+                    document.getElementById('wakeWordInput').value = settings.wake_word;
+                    document.getElementById('voiceToggle').checked = settings.voice_enabled;
+                    document.getElementById('personalitySelect').value = settings.assistant_personality;
+                    document.getElementById('sensorToggle').checked = settings.sensor_enabled;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+
+        // Update the control panel status periodically
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update system stats
+                    document.getElementById('assistantStatus').textContent = data.assistant_active ? 'Active' : 'Inactive';
+                    document.getElementById('cpuUsage').textContent = data.stats.cpu_usage + '%';
+                    document.getElementById('memoryUsage').textContent = data.stats.memory_usage + '%';
+                    document.getElementById('cpuTemp').textContent = data.stats.cpu_temp !== null ? data.stats.cpu_temp.toFixed(1) + '°C' : 'N/A';
+                    document.getElementById('sensorDistance').textContent = data.last_distance !== null ? data.last_distance.toFixed(2) + ' cm' : 'N/A';
+
+                    // Update current speech
+                    document.getElementById('currentSpeech').innerHTML = marked.parse(data.current_speech);
+
+                    // Update chat history
+                    updateChatHistory(data.chat_history);
+
+                    // Update requests log
+                    updateRequestsLog(data.requests_history);
+
+                    // Update Pi Data
+                    if (data.requests_history.length > 0) {
+                        const latest_pi_data = data.requests_history.find(req => req.user_text === 'Sensor Triggered') || {};
+                        document.getElementById('piCpuUsage').textContent = data.stats.cpu_usage + '%';
+                        document.getElementById('piMemoryUsage').textContent = data.stats.memory_usage + '%';
+                        document.getElementById('piCpuTemp').textContent = data.stats.cpu_temp !== null ? data.stats.cpu_temp.toFixed(1) + '°C' : 'N/A';
+                        document.getElementById('piSensorDistance').textContent = data.last_distance !== null ? data.last_distance.toFixed(2) + ' cm' : 'N/A';
+                    }
+
+                    // Optionally, fetch and update Pi Data from pi_data table
+                    updatePiData();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+
+        // Function to update Pi Data
+        function updatePiData() {
+            fetch('/api/pi_latest_data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+                    document.getElementById('piCpuUsage').textContent = data.cpu_usage + '%';
+                    document.getElementById('piMemoryUsage').textContent = data.memory_usage + '%';
+                    document.getElementById('piCpuTemp').textContent = data.cpu_temp !== null ? data.cpu_temp.toFixed(1) + '°C' : 'N/A';
+                    document.getElementById('piSensorDistance').textContent = data.sensor_distance !== null ? data.sensor_distance.toFixed(2) + ' cm' : 'N/A';
+                })
+                .catch(error => {
+                    console.error('Error fetching Pi Data:', error);
+                });
+        }
+
+        setInterval(updateStatus, 2000); // Update every 2 seconds
+
+        // Handle Kill Switch
+        document.getElementById('killBtn').addEventListener('click', () => {
+            fetch('/api/kill', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.status);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        });
+
+        // Handle Text Input Submission
+        document.getElementById('submitBtn').addEventListener('click', () => {
+            const text = document.getElementById('textInput').value;
+            if (text.trim() !== '') {
+                const assistantResponseDiv = document.getElementById('currentSpeech');
+                assistantResponseDiv.innerHTML = '';
+
+                fetch('/api/text_input', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.body.getReader();
+                })
+                .then(reader => {
+                    const decoder = new TextDecoder();
+                    let assistantResponse = '';
+
+                    function read() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                document.getElementById('textInput').value = '';
+                                updateStatus();
+                                return;
+                            }
+                            assistantResponse += decoder.decode(value, { stream: true });
+                            assistantResponseDiv.innerHTML = marked.parse(assistantResponse);
+
+                            assistantResponseDiv.querySelectorAll('pre code').forEach((block) => {
+                                hljs.highlightElement(block);
+                            });
+
+                            read();
+                        }).catch(error => {
+                            console.error('Error:', error);
+                        });
+                    }
+                    read();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            } else {
+                alert('Please enter a message.');
+            }
+        });
+
+        // Update Chat History
+        function updateChatHistory(chatHistory) {
+            const chatHistoryDiv = document.getElementById('chatHistory');
+            chatHistoryDiv.innerHTML = '';
+            chatHistory.slice().reverse().forEach(chat => {  // Reverse to show oldest first
+                const chatEntry = document.createElement('div');
+                chatEntry.className = 'bg-white dark:bg-gray-800 p-3 rounded-lg shadow';
+
+                const userMsg = document.createElement('div');
+                userMsg.className = 'mb-2';
+                userMsg.innerHTML = `<strong class="text-blue-600 dark:text-blue-400">You:</strong> ${chat.user}`;
+
+                const assistantMsg = document.createElement('div');
+                const assistantContent = marked.parse(chat.assistant);
+                assistantMsg.innerHTML = `<strong class="text-green-600 dark:text-green-400">Assistant:</strong> ${assistantContent}`;
+
+                chatEntry.appendChild(userMsg);
+                chatEntry.appendChild(assistantMsg);
+                chatHistoryDiv.appendChild(chatEntry);
+
+                assistantMsg.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            });
+            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+        }
+
+        // Update Requests Log
+        function updateRequestsLog(requestsHistory) {
+            const requestsLogDiv = document.getElementById('requestsLog');
+            requestsLogDiv.innerHTML = '';
+            requestsHistory.slice().reverse().forEach(request => {  // Reverse to show newest first
+                const requestEntry = document.createElement('div');
+                requestEntry.className = 'bg-white dark:bg-gray-800 p-3 rounded-lg shadow';
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'text-sm text-gray-600 dark:text-gray-400 mb-1';
+                timestamp.textContent = request.timestamp;
+
+                const userText = document.createElement('div');
+                userText.className = 'mb-2';
+                userText.innerHTML = `<strong class="text-blue-600 dark:text-blue-400">User:</strong> ${request.user_text}`;
+
+                const assistantResponse = document.createElement('div');
+                assistantResponse.className = 'mb-2';
+                assistantResponse.innerHTML = `<strong class="text-green-600 dark:text-green-400">Assistant:</strong> ${marked.parse(request.assistant_response)}`;
+
+                requestEntry.appendChild(timestamp);
+                requestEntry.appendChild(userText);
+                requestEntry.appendChild(assistantResponse);
+                requestsLogDiv.appendChild(requestEntry);
+
+                assistantResponse.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            });
+            requestsLogDiv.scrollTop = requestsLogDiv.scrollHeight;
+        }
+
+        // Update Pi Data Section
+        function updatePiData() {
+            fetch('/api/pi_latest_data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+                    document.getElementById('piCpuUsage').textContent = data.cpu_usage + '%';
+                    document.getElementById('piMemoryUsage').textContent = data.memory_usage + '%';
+                    document.getElementById('piCpuTemp').textContent = data.cpu_temp !== null ? data.cpu_temp.toFixed(1) + '°C' : 'N/A';
+                    document.getElementById('piSensorDistance').textContent = data.sensor_distance !== null ? data.sensor_distance.toFixed(2) + ' cm' : 'N/A';
+                })
+                .catch(error => {
+                    console.error('Error fetching Pi Data:', error);
+                });
+        }
+
+        // Toggle Dark Mode
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark');
+            const sunIcon = document.getElementById('sunIcon');
+            const moonIcon = document.getElementById('moonIcon');
+            if (isDarkMode) {
+                sunIcon.style.display = 'none';
+                moonIcon.style.display = 'block';
+            } else {
+                sunIcon.style.display = 'block';
+                moonIcon.style.display = 'none';
+            }
+        });
+
+        // Save Settings
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            const wakeWord = document.getElementById('wakeWordInput').value;
+            const voiceEnabled = document.getElementById('voiceToggle').checked;
+            const assistantPersonality = document.getElementById('personalitySelect').value;
+            const sensorEnabled = document.getElementById('sensorToggle').checked;
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    wake_word: wakeWord,
+                    voice_enabled: voiceEnabled,
+                    assistant_personality: assistantPersonality,
+                    sensor_enabled: sensorEnabled
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.status);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+
+        // Show About Sheet
+        document.getElementById('aboutBtn').addEventListener('click', () => {
+            document.getElementById('aboutSheet').classList.add('active');
+        });
+
+        // Close About Sheet
+        document.getElementById('closeAboutBtn').addEventListener('click', () => {
+            document.getElementById('aboutSheet').classList.remove('active');
+        });
+
+        // Fetch the latest Pi Data
+        function fetchLatestPiData() {
+            fetch('/api/pi_latest_data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+                    document.getElementById('piCpuUsage').textContent = data.cpu_usage + '%';
+                    document.getElementById('piMemoryUsage').textContent = data.memory_usage + '%';
+                    document.getElementById('piCpuTemp').textContent = data.cpu_temp !== null ? data.cpu_temp.toFixed(1) + '°C' : 'N/A';
+                    document.getElementById('piSensorDistance').textContent = data.sensor_distance !== null ? data.sensor_distance.toFixed(2) + ' cm' : 'N/A';
+                })
+                .catch(error => {
+                    console.error('Error fetching Pi Data:', error);
+                });
+        }
+
+        // Initialize settings and update status on page load
+        window.onload = () => {
+            initializeSettings();
+            updateStatus();
+            fetchLatestPiData();
+        };
+    </script>
+</body>
+</html>
