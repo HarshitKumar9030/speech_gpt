@@ -8,41 +8,37 @@ import requests
 import serial
 import logging
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-# Configure logging
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-# Main server configuration
-MAIN_SERVER_URL = 'http://192.168.81.193:5000/api/pi_data'  # Replace with your main server's IP address
+MAIN_SERVER_URL = os.getenv('MAIN_SERVER_URL', 'http://192.168.81.193:5000/api/pi_data') 
+API_KEY = os.getenv('API_KEY', 'default_key')  
 
-# Serial port configuration for Arduino
-SERIAL_PORT = '/dev/ttyACM0'  # Replace with your serial port (e.g., '/dev/ttyACM0' on Linux)
+SERIAL_PORT = '/dev/ttyACM0'  
 BAUD_RATE = 9600
 
-# Initialize Flask app (optional, can be used for status checks)
 app = Flask(__name__)
 CORS(app)
 
-# Function to read sensor data from Arduino
-def read_sensor_data():
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        logging.info(f"Connected to Arduino on {SERIAL_PORT} at {BAUD_RATE} baud.")
-        while True:
+def read_sensor_data(ser, data_queue):
+    while True:
+        try:
             line = ser.readline().decode('utf-8').strip()
             if line:
                 try:
                     distance = float(line)
                     logging.info(f"Received distance: {distance} cm")
-                    return distance
+                    data_queue.append(distance)
                 except ValueError:
                     logging.warning(f"Invalid data received from Arduino: '{line}'")
-            time.sleep(0.1)
-    except serial.SerialException as e:
-        logging.error(f"Serial exception: {e}")
-        return None
+        except Exception as e:
+            logging.error(f"Error reading from serial port: {e}")
+            time.sleep(1) 
 
-# Function to gather system stats
 def gather_system_stats():
     cpu_usage = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory()
@@ -63,10 +59,12 @@ def gather_system_stats():
         'cpu_temp': cpu_temp
     }
 
-# Function to send data to the main server
 def send_data_to_main_server(data):
     try:
-        headers = {'Content-Type': 'application/json'}
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {API_KEY}' 
+        }
         response = requests.post(MAIN_SERVER_URL, json=data, headers=headers)
         if response.status_code == 200:
             logging.info("Data sent successfully to the main server.")
@@ -75,32 +73,57 @@ def send_data_to_main_server(data):
     except Exception as e:
         logging.error(f"Exception while sending data to the main server: {e}")
 
-# every second
-def collect_and_send_data(interval=1):
+# Function to collect and send data periodically every second
+def collect_and_send_data(ser):
+    data_queue = []
+    read_thread = threading.Thread(target=read_sensor_data, args=(ser, data_queue), daemon=True)
+    read_thread.start()
+
     while True:
+        # Wait until we have at least one distance measurement
+        while not data_queue:
+            time.sleep(0.1)
+        
+        # Pop the first distance measurement
+        distance = data_queue.pop(0)
+        
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        sensor_distance = read_sensor_data()
         system_stats = gather_system_stats()
 
-        if sensor_distance is not None:
-            data = {
-                'timestamp': timestamp,
-                'cpu_usage': system_stats['cpu_usage'],
-                'memory_usage': system_stats['memory_usage'],
-                'cpu_temp': system_stats['cpu_temp'],
-                'sensor_distance': sensor_distance
-            }
-            send_data_to_main_server(data)
-        else:
-            logging.warning("Sensor distance data is unavailable. Skipping data send.")
+        data = {
+            'timestamp': timestamp,
+            'cpu_usage': system_stats['cpu_usage'],
+            'memory_usage': system_stats['memory_usage'],
+            'cpu_temp': system_stats['cpu_temp'],
+            'sensor_distance': distance
+        }
+        send_data_to_main_server(data)
 
-        time.sleep(interval)
+        # Sleep to maintain the 1-second interval
+        time.sleep(1)
 
 # Flask route for status check (optional)
 @app.route('/api/pi_status', methods=['GET'])
 def pi_status():
     stats = gather_system_stats()
-    sensor_distance = read_sensor_data()
+    # For status check, we can assume the latest distance is the most recent in the queue or fetched from the database
+    # Here, we'll fetch the latest data from the database
+    try:
+        conn = sqlite3.connect('assistant.db')
+        c = conn.cursor()
+        c.execute('''
+            SELECT sensor_distance
+            FROM pi_data
+            ORDER BY id DESC
+            LIMIT 1
+        ''')
+        row = c.fetchone()
+        conn.close()
+        sensor_distance = row[0] if row else 'N/A'
+    except Exception as e:
+        logging.error(f"Error fetching latest Pi data for status: {e}")
+        sensor_distance = 'Unavailable'
+
     return jsonify({
         'status': 'Running',
         'cpu_usage': stats['cpu_usage'],
@@ -110,11 +133,19 @@ def pi_status():
     }), 200
 
 if __name__ == '__main__':
-    # Start the data collection thread
-    data_thread = threading.Thread(target=collect_and_send_data, daemon=True)
+    # Initialize serial connection
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+        logging.info(f"Connected to Arduino on {SERIAL_PORT} at {BAUD_RATE} baud.")
+    except serial.SerialException as e:
+        logging.error(f"Failed to connect to Arduino: {e}")
+        exit(1)
+
+    # Start the data collection and sending thread
+    data_thread = threading.Thread(target=collect_and_send_data, args=(ser,), daemon=True)
     data_thread.start()
 
-    logging.info("Raspberry Pi server is running and collecting data.")
+    logging.info("Raspberry Pi server is running and collecting data every second.")
 
     # Start Flask server (optional, for status checks)
     app.run(host='0.0.0.0', port=5001, use_reloader=False)
