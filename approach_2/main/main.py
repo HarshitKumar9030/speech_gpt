@@ -1,16 +1,12 @@
 import threading
 import time
-import speech_recognition as sr
-import os
 import psutil
-import subprocess
 import sqlite3
 from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS
 from g4f import ChatCompletion
 import pyttsx3
 import asyncio
-import serial  
 import logging
 import requests 
 from datetime import datetime
@@ -18,7 +14,7 @@ from datetime import datetime
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-BING_API_KEY = ''  # Replace with your actual Bing Search API key
+BING_API_KEY = '559b7177b68340778ab4eae682a50239'  # Replace with your actual Bing Search API key
 BING_SEARCH_ENDPOINT = 'https://api.bing.microsoft.com/v7.0/search'
 
 # Set asyncio policy for Windows compatibility
@@ -32,12 +28,7 @@ assistant_active = False
 last_activation_time = 0
 kill_switch_activated = False
 current_speech = ""
-last_distance = None  # Store the last distance measurement
 tts_lock = threading.Lock()
-
-# Serial port configuration
-SERIAL_PORT = 'COM12'  # Replace with your serial port (e.g., 'COM3' on Windows or '/dev/ttyACM0' on Linux)
-BAUD_RATE = 9600
 
 # Initialize database and create tables if they don't exist
 def init_db():
@@ -332,34 +323,7 @@ def listen_loop():
 
     logging.info("Kill switch activated. Exiting listen loop.")
 
-# Function to continuously read from the ultrasonic sensor
-def sensor_loop():
-    global kill_switch_activated, last_distance, assistant_active, last_activation_time
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        logging.info(f"Connected to Arduino on {SERIAL_PORT} at {BAUD_RATE} baud.")
-        while not kill_switch_activated:
-            line = ser.readline().decode('utf-8').strip()
-            if line:
-                try:
-                    distance = float(line)
-                    last_distance = distance
-                    logging.info(f"Distance: {distance} cm")
-                    settings = get_settings()
-                    if settings.get('sensor_enabled', True):
-                        if 10 <= distance <= 50:
-                            if not assistant_active:
-                                # Activate assistant
-                                assistant_active = True
-                                last_activation_time = time.time()
-                                threading.Thread(target=trigger_greeting).start()
-                    time.sleep(0.1)
-                except ValueError:
-                    logging.warning(f"Received non-numeric data from sensor: '{line}'")
-    except serial.SerialException as e:
-        logging.error(f"Serial exception: {e}")
-
-# Function to trigger a greeting when the sensor is activated
+# Function to trigger a greeting when activated
 def trigger_greeting():
     global current_speech, assistant_active, last_activation_time
     greeting_text = "Hello! How can I assist you today?"
@@ -406,7 +370,6 @@ def get_status():
         'stats': stats,
         'chat_history': chat_history,
         'settings': settings,
-        'last_distance': last_distance,
         'requests_history': requests_history
     })
 
@@ -470,6 +433,34 @@ def receive_pi_data():
         logging.error(f"Error inserting Pi data into database: {e}")
         return jsonify({'error': 'Failed to insert data into database.'}), 500
 
+# Flask API route to get the latest Pi data
+@app.route('/api/pi_latest_data', methods=['GET'])
+def get_latest_pi_data():
+    try:
+        conn = sqlite3.connect('assistant.db')
+        c = conn.cursor()
+        c.execute('''
+            SELECT cpu_usage, memory_usage, cpu_temp, sensor_distance
+            FROM pi_data
+            ORDER BY id DESC
+            LIMIT 1
+        ''')
+        row = c.fetchone()
+        conn.close()
+        if row:
+            cpu_usage, memory_usage, cpu_temp, sensor_distance = row
+            return jsonify({
+                'cpu_usage': cpu_usage,
+                'memory_usage': memory_usage,
+                'cpu_temp': cpu_temp,
+                'sensor_distance': sensor_distance
+            }), 200
+        else:
+            return jsonify({'error': 'No Pi data available.'}), 404
+    except Exception as e:
+        logging.error(f"Error fetching latest Pi data: {e}")
+        return jsonify({'error': 'Failed to fetch Pi data.'}), 500
+
 # Function to start the Flask server
 def start_server():
     app.run(host='0.0.0.0', port=5000, use_reloader=False, threaded=True)
@@ -479,10 +470,6 @@ if __name__ == '__main__':
     # Start the voice recognition thread
     listen_thread = threading.Thread(target=listen_loop, daemon=True)
     listen_thread.start()
-
-    # Start the sensor reading thread
-    sensor_thread = threading.Thread(target=sensor_loop, daemon=True)
-    sensor_thread.start()
 
     # Start the Flask server thread
     server_thread = threading.Thread(target=start_server, daemon=True)
@@ -497,6 +484,5 @@ if __name__ == '__main__':
         logging.info("Shutting down...")
         kill_switch_activated = True
         listen_thread.join()
-        sensor_thread.join()
         server_thread.join()
         logging.info("Assistant has been stopped.")
