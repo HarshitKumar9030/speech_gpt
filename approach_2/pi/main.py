@@ -75,8 +75,8 @@ def send_data_to_main_server(data):
     except Exception as e:
         logging.error(f"Exception while sending data to the main server: {e}")
 
-# Function to collect and send data periodically
-def collect_and_send_data(interval=10):
+# every second
+def collect_and_send_data(interval=1):
     while True:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sensor_distance = read_sensor_data()
