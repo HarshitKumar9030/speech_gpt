@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio Assistant Control Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
@@ -430,7 +429,7 @@
         function updateChatHistory(chatHistory) {
             const chatHistoryDiv = document.getElementById('chatHistory');
             chatHistoryDiv.innerHTML = '';
-            chatHistory.slice().reverse().forEach(chat => {  // Reverse to show oldest first
+            chatHistory.slice().reverse().forEach(chat => {
                 const chatEntry = document.createElement('div');
                 chatEntry.className = 'bg-white dark:bg-gray-800 p-3 rounded-lg shadow';
 
@@ -457,7 +456,7 @@
         function updateRequestsLog(requestsHistory) {
             const requestsLogDiv = document.getElementById('requestsLog');
             requestsLogDiv.innerHTML = '';
-            requestsHistory.slice().reverse().forEach(request => {  // Reverse to show newest first
+            requestsHistory.slice().reverse().forEach(request => {
                 const requestEntry = document.createElement('div');
                 requestEntry.className = 'bg-white dark:bg-gray-800 p-3 rounded-lg shadow';
 
@@ -538,34 +537,10 @@
             document.getElementById('aboutSheet').classList.remove('active');
         });
 
-        // Fetch the latest Pi Data
-        function fetchLatestPiData() {
-            fetch('/api/pi_latest_data')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error(data.error);
-                        document.getElementById('piCpuUsage').textContent = 'N/A';
-                        document.getElementById('piMemoryUsage').textContent = 'N/A';
-                        document.getElementById('piCpuTemp').textContent = 'N/A';
-                        document.getElementById('piSensorDistance').textContent = 'N/A';
-                        return;
-                    }
-                    document.getElementById('piCpuUsage').textContent = data.cpu_usage + '%';
-                    document.getElementById('piMemoryUsage').textContent = data.memory_usage + '%';
-                    document.getElementById('piCpuTemp').textContent = data.cpu_temp !== null ? data.cpu_temp.toFixed(1) + '°C' : 'N/A';
-                    document.getElementById('piSensorDistance').textContent = data.sensor_distance !== null ? data.sensor_distance.toFixed(2) + ' cm' : 'N/A';
-                })
-                .catch(error => {
-                    console.error('Error fetching Pi Data:', error);
-                });
-        }
-
         // Initialize settings and update status on page load
         window.onload = () => {
             initializeSettings();
             updateStatus();
-            fetchLatestPiData();
         };
     </script>
 </body>
