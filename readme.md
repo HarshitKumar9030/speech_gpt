@@ -1,6 +1,7 @@
 
 # Control Panel
 
+> Working on this still
 > Use Alternate if you got a low spec PI, you can use a vm to run the server or can do it locally
 
 ![Control Panel Banner](/images/Screenshot%20(1546).png)
