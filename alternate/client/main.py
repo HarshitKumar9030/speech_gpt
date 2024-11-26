@@ -18,9 +18,10 @@ last_activation_time = 0
 kill_switch_activated = False
 current_speech = ""
 tts_lock = threading.Lock()
+stop_speech_event = threading.Event()  # New event to stop speech
 
 # Replace this with the IP address and port of your laptop running the AI server
-AI_SERVER_URL = 'http://192.168.81.193:8000/process_ai'
+AI_SERVER_URL = 'http://192.168.180.253:8000/process_ai'
 
 def init_db():
     conn = sqlite3.connect('assistant.db')
@@ -30,7 +31,8 @@ def init_db():
             id INTEGER PRIMARY KEY,
             wake_word TEXT,
             voice_enabled INTEGER,
-            assistant_personality TEXT
+            assistant_personality TEXT,
+            stop_word TEXT
         )
     ''')
     c.execute('''
@@ -43,40 +45,42 @@ def init_db():
     c.execute('SELECT COUNT(*) FROM settings')
     if c.fetchone()[0] == 0:
         c.execute('''
-            INSERT INTO settings (id, wake_word, voice_enabled, assistant_personality)
-            VALUES (?, ?, ?, ?)
-        ''', (1, 'hello', 1, 'Default'))
+            INSERT INTO settings (id, wake_word, voice_enabled, assistant_personality, stop_word)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (1, 'hello', 1, 'Default', 'stop'))
     conn.commit()
     conn.close()
 
 def get_settings():
     conn = sqlite3.connect('assistant.db')
     c = conn.cursor()
-    c.execute('SELECT wake_word, voice_enabled, assistant_personality FROM settings WHERE id = 1')
+    c.execute('SELECT wake_word, voice_enabled, assistant_personality, stop_word FROM settings WHERE id = 1')
     result = c.fetchone()
     conn.close()
     if result:
-        wake_word, voice_enabled, assistant_personality = result
+        wake_word, voice_enabled, assistant_personality, stop_word = result
         return {
             'wake_word': wake_word,
             'voice_enabled': bool(voice_enabled),
-            'assistant_personality': assistant_personality
+            'assistant_personality': assistant_personality,
+            'stop_word': stop_word
         }
     else:
         return {
             'wake_word': 'hello',
             'voice_enabled': True,
-            'assistant_personality': 'Default'
+            'assistant_personality': 'Default',
+            'stop_word': 'stop'
         }
 
-def update_settings_in_db(wake_word, voice_enabled, assistant_personality):
+def update_settings_in_db(wake_word, voice_enabled, assistant_personality, stop_word):
     conn = sqlite3.connect('assistant.db')
     c = conn.cursor()
     c.execute('''
         UPDATE settings
-        SET wake_word = ?, voice_enabled = ?, assistant_personality = ?
+        SET wake_word = ?, voice_enabled = ?, assistant_personality = ?, stop_word = ?
         WHERE id = 1
-    ''', (wake_word, int(voice_enabled), assistant_personality))
+    ''', (wake_word, int(voice_enabled), assistant_personality, stop_word))
     conn.commit()
     conn.close()
 
@@ -142,6 +146,7 @@ def ai_process_stream(text):
     try:
         settings = get_settings()
         voice_enabled = settings['voice_enabled']
+        stop_word = settings['stop_word']
 
         full_response = ai_process(text)
 
@@ -153,11 +158,25 @@ def ai_process_stream(text):
 
         if voice_enabled:
             with tts_lock:
+                # Reset the stop event
+                stop_speech_event.clear()
+                
                 local_tts_engine = pyttsx3.init()
                 local_tts_engine.setProperty('rate', 150)
                 local_tts_engine.setProperty('volume', 0.9)
-                local_tts_engine.say(full_response)
-                local_tts_engine.runAndWait()
+                
+                def on_word(name, location, length):
+                    if stop_speech_event.is_set():
+                        return False
+                    return True
+                
+                local_tts_engine.connect('started-word', on_word)
+                
+                try:
+                    local_tts_engine.say(full_response)
+                    local_tts_engine.runAndWait()
+                except Exception:
+                    pass  # Handle potential interruption
 
         global current_speech
         current_speech = f"Assistant: {full_response}"
@@ -170,6 +189,7 @@ def process_ai_response(text):
     global current_speech
     settings = get_settings()
     voice_enabled = settings['voice_enabled']
+    stop_word = settings['stop_word']
 
     ai_response = ai_process(text)
     current_speech = f"Assistant: {ai_response}"
@@ -178,11 +198,25 @@ def process_ai_response(text):
 
     if voice_enabled:
         with tts_lock:
+            # Reset the stop event
+            stop_speech_event.clear()
+            
             local_tts_engine = pyttsx3.init()
             local_tts_engine.setProperty('rate', 150)
             local_tts_engine.setProperty('volume', 0.9)
-            local_tts_engine.say(ai_response)
-            local_tts_engine.runAndWait()
+            
+            def on_word(name, location, length):
+                if stop_speech_event.is_set():
+                    return False
+                return True
+            
+            local_tts_engine.connect('started-word', on_word)
+            
+            try:
+                local_tts_engine.say(ai_response)
+                local_tts_engine.runAndWait()
+            except Exception:
+                pass  # Handle potential interruption
 
 def listen_loop():
     global assistant_active, last_activation_time, kill_switch_activated, current_speech
@@ -192,6 +226,8 @@ def listen_loop():
     while not kill_switch_activated:
         settings = get_settings()
         wake_word = settings['wake_word']
+        stop_word = settings['stop_word']
+
         with microphone as source:
             recognizer.adjust_for_ambient_noise(source)
             print("Listening...")
@@ -199,6 +235,12 @@ def listen_loop():
                 audio = recognizer.listen(source, timeout=5)
                 text = recognizer.recognize_google(audio)
                 print(f"Recognized: {text}")
+
+                # Check for stop word to halt speech
+                if text.lower() == stop_word.lower():
+                    stop_speech_event.set()
+                    current_speech = "Speech stopped."
+                    continue
 
                 if not assistant_active and wake_word.lower() in text.lower():
                     assistant_active = True
@@ -261,9 +303,10 @@ def update_settings():
     wake_word = data.get('wake_word')
     voice_enabled = data.get('voice_enabled')
     assistant_personality = data.get('assistant_personality')
-    if wake_word is None or voice_enabled is None or assistant_personality is None:
+    stop_word = data.get('stop_word')
+    if wake_word is None or voice_enabled is None or assistant_personality is None or stop_word is None:
         return jsonify({'error': 'Invalid settings data'}), 400
-    update_settings_in_db(wake_word, voice_enabled, assistant_personality)
+    update_settings_in_db(wake_word, voice_enabled, assistant_personality, stop_word)
     return jsonify({'status': 'Settings updated.'})
 
 def start_server():
